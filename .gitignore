@@ -1,0 +1,6 @@
+./mnist_data
+./pretrain/run_deepspeed
+.idea
+*/__pycache__
+*/*/__pycache__
+*/*/*/__pycache__
