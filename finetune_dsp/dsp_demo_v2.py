@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
 
-from dataclasses import dataclass
-
 import deepspeed
-
-import time
 
 import os
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
@@ -14,29 +10,21 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-from utils.metrics import LossAverage
 
 def train():
-
-    @dataclass
-    class args:
-        base_model_path="/data/Qwen2.5-0.5B-Instruct"
-        output_dir='/data/output/dsp_demo_saved'
-        train_batch_size=4
-
     from utils.fix_seed import seed_everything
     seed_everything(12)
 
     deepspeed.init_distributed()
 
-
+    base_model_path = "/data/Qwen2.5-0.5B-Instruct"
     # base_model_path = '/data/data/babyllama-100m-2024'
     # base_model_path = '/data/data/mt0-small'
 
     import transformers
     # Load model and tokenizer
     model = transformers.AutoModelForCausalLM.from_pretrained(
-        pretrained_model_name_or_path=args.base_model_path,
+        pretrained_model_name_or_path=base_model_path,
         device_map='auto',
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
@@ -50,7 +38,7 @@ def train():
     #                                               )
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
-        pretrained_model_name_or_path=args.base_model_path,
+        pretrained_model_name_or_path=base_model_path,
         model_max_length=512,
         padding_side="right",
         use_fast=False,
@@ -90,10 +78,11 @@ def train():
     print(f'model_device: {model_engine.device}')
 
     # # load checkpoint
-
-    os.makedirs(args.output_dir, exist_ok=True)
+    load_dir = '/data/output/dsp_demo_saved'
+    os.makedirs(load_dir, exist_ok=True)
     # _, client_sd = model_engine.load_checkpoint(load_dir, tag=None)
     # step = client_sd['step']
+
 
     from finetune_qwen.datasets.load_dataset_private_qa import load_dataset
     data_module = load_dataset(tokenizer=tokenizer)
@@ -102,16 +91,14 @@ def train():
     from finetune_dsp.load_dataset import collate_fn
     from functools import partial
     dataloader = DataLoader(data_module['train_dataset'],
-                            batch_size=args.train_batch_size,
+                            batch_size=2,
                             collate_fn=partial(collate_fn, device=model.device),
                             )
     print(f'n_train_batch: {len(dataloader)}')
 
-    m_loss = LossAverage()
     for step, batch in enumerate(dataloader):
         # print(batch['input_ids'].device)
         # exit(0)
-        t0 = time.time()
 
         # forward() method
         loss = model_engine(**batch)['loss']
@@ -124,27 +111,15 @@ def train():
         # weight update
         model_engine.step()
 
-        m_loss.update(loss.item(), args.train_batch_size)
+        # print(loss.item())
 
-        t1 = time.time()
-        throughput = (batch['input_ids'].shape[0] * batch['input_ids'].shape[1]) / (t1 - t0)
-
-
-        if step %100 == 0:
-            print(f'step: {step}, loss: {m_loss.avg}, throughput_per_device: {round(throughput, 3)}')
-
-        # # save checkpoint
-        # if step > 0 and step % 100 == 0:
-        #     # # client_sd['step'] = step
-        #     # ckpt_id = loss.item()
-        #     # model_engine.save_checkpoint(load_dir, ckpt_id,
-        #     #                              # client_sd=client_sd
-        #     #                              )
-
-    from dschat.utils.utils import save_hf_format
-    save_hf_format(model, tokenizer, args)
-
-
+        # save checkpoint
+        if step > 0 and step % 1000 == 0:
+            # client_sd['step'] = step
+            ckpt_id = loss.item()
+            model_engine.save_checkpoint(load_dir, ckpt_id,
+                                         # client_sd=client_sd
+                                         )
 
 
 if __name__ == '__main__':

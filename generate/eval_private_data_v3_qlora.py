@@ -1,12 +1,16 @@
 import json
 from argparse import ArgumentParser
-import os
 import tiktoken
 from os.path import exists, join
 from time import sleep
 import jsonlines
 
+import os
+
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+
 import sys
+
 sys.path.append('..')
 
 # from transformers import pipeline, AutoTokenizer
@@ -73,12 +77,16 @@ class AnswerBot:
         from peft import PeftModel
 
         # ###################### qwen2-0.5B ###################
-        # model_path = '/data/data/Qwen2-0.5B-Instruct'
+        model_path = '/data/Qwen2.5-0.5B-Instruct'
         # # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_ft_lora_huatuo2/checkpoint-110'
         # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_ft_lora_huatuo2_test/checkpoint-40'
 
-        # tokenizer = AutoTokenizer.from_pretrained(model_path)
-        # model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.bfloat16)
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            # model_path,
+            '/data/output/dsp_demo_saved',
+            device_map="auto",
+            torch_dtype=torch.float16)
         # model = PeftModel.from_pretrained(model, model_id=lora_path)
 
         # ###################### qwen2-7B ###################
@@ -126,25 +134,25 @@ class AnswerBot:
         # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5_qlora_prv_qa_exp5_adamw/checkpoint-2000'
         # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_7_qlora_prv_qa_exp6/checkpoint-1000'
 
-        # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa_exp7_plus/checkpoint-300'
-        model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa2_exp8_plus/checkpoint-561'
-
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-        from transformers import BitsAndBytesConfig
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_storage=torch.bfloat16,
-        )
-        model = AutoModelForCausalLM.from_pretrained(model_path,
-                                                     device_map="auto",
-                                                     torch_dtype=torch.bfloat16,
-                                                     # quantization_config=bnb_config,
-                                                     )
-        # model = PeftModel.from_pretrained(model, model_id=lora_path)
+        # # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa_exp7_plus/checkpoint-300'
+        # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa2_exp8_plus/checkpoint-561'
+        #
+        # tokenizer = AutoTokenizer.from_pretrained(model_path)
+        #
+        # from transformers import BitsAndBytesConfig
+        # bnb_config = BitsAndBytesConfig(
+        #     load_in_4bit=True,
+        #     bnb_4bit_quant_type="nf4",
+        #     bnb_4bit_compute_dtype=torch.bfloat16,
+        #     bnb_4bit_use_double_quant=True,
+        #     bnb_4bit_quant_storage=torch.bfloat16,
+        # )
+        # model = AutoModelForCausalLM.from_pretrained(model_path,
+        #                                              device_map="auto",
+        #                                              torch_dtype=torch.bfloat16,
+        #                                              # quantization_config=bnb_config,
+        #                                              )
+        # # model = PeftModel.from_pretrained(model, model_id=lora_path)
 
         model.eval()
         return model, tokenizer
@@ -178,13 +186,12 @@ class AnswerBot:
             pad_token_id=self.tokenizer.eos_token_id
         )
 
-
         response = outputs[0][input_ids.shape[-1]:]
         response_str = self.tokenizer.decode(response, skip_special_tokens=True)
         # exit(0)
 
         # print(response_str)
-        response_str = response_str[0:1]
+        response_str = response_str[0:8].strip()
         return response_str
 
 

@@ -265,7 +265,7 @@ def make_supervised_data_module(
 class DataArguments:
     data_path = [
         # '/mnt2/expGPT/data/qa_samples_from_baiduyidian_20241010_finish.jsonl'
-        '/mnt2/expGPT/data/qa2_samples_teacher_and_student_from_baiduyidian_20241023_finish_inst.jsonl'
+        '../data/qa2_samples_teacher_and_student_from_baiduyidian_20241023_finish_inst.jsonl'
     ]
     eval_data_path = [
         # '/data/data/med_dataset/medical/finetune/valid_zh_0.json',
