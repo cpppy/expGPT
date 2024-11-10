@@ -10,6 +10,9 @@ import time
 import os
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
+import sys
+sys.path.append('..')
+
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -21,7 +24,7 @@ def train():
     @dataclass
     class args:
         base_model_path="/data/Qwen2.5-0.5B-Instruct"
-        output_dir='/data/output/dsp_demo_saved'
+        output_dir='/data/output/dsp_demo_saved_2'
         train_batch_size=4
 
     from utils.fix_seed import seed_everything
@@ -36,7 +39,8 @@ def train():
     import transformers
     # Load model and tokenizer
     model = transformers.AutoModelForCausalLM.from_pretrained(
-        pretrained_model_name_or_path=args.base_model_path,
+        # pretrained_model_name_or_path=args.base_model_path,
+        pretrained_model_name_or_path='/data/output/dsp_demo_saved',
         device_map='auto',
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
@@ -95,8 +99,13 @@ def train():
     # _, client_sd = model_engine.load_checkpoint(load_dir, tag=None)
     # step = client_sd['step']
 
-    from finetune_qwen.datasets.load_dataset_private_qa import load_dataset
-    data_module = load_dataset(tokenizer=tokenizer)
+    # from finetune_qwen.datasets.load_dataset_private_qa import load_dataset
+    # data_module = load_dataset(tokenizer=tokenizer)
+
+    from finetune_dsp.datasets import load_medmcq
+    data_module = {
+        'train_dataset': load_medmcq.main()
+    }
 
     from torch.utils.data.dataloader import DataLoader
     from finetune_dsp.load_dataset import collate_fn
@@ -143,6 +152,7 @@ def train():
 
     from dschat.utils.utils import save_hf_format
     save_hf_format(model, tokenizer, args)
+    tokenizer.save_pretrained(args.output_dir)
 
 
 
