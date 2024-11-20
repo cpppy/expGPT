@@ -134,17 +134,8 @@ class AnswerBot:
         response_str = response_str[0:8].strip()
         return response_str
 
-    def completion_inference(self, prompt):
-        # from llama_index.core.llms import ChatMessage, MessageRole, ChatResponse
-        # _messages = []
-        # for m in messages:
-        #     if m['role'] == 'system':
-        #         _messages.append(ChatMessage(role=MessageRole.SYSTEM, content=m['content']))
-        #     elif m['role'] == 'user':
-        #         _messages.append(ChatMessage(role=MessageRole.USER, content=m['content']))
-        #     if m['role'] == 'assistant':
-        #         _messages.append(ChatMessage(role=MessageRole.ASSISTANT, content=m['content']))
 
+    def completion_inference(self, prompt):
         # response = self.llm.app(_messages)
         # response_str = response.message.content
         input_ids = self.tokenizer.encode(
