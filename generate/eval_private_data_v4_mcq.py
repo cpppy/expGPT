@@ -84,6 +84,7 @@ class AnswerBot:
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForCausalLM.from_pretrained(
             # model_path,
+            # '/data/output/dsp_demo_saved',
             '/data/output/dsp_demo_saved_2',
             device_map="auto",
             torch_dtype=torch.float16)
@@ -109,10 +110,14 @@ class AnswerBot:
             messages,
             add_generation_prompt=True,
             return_tensors="pt",
-        ).cuda()
+            # tokenize=False,
+        )
+        # print(input_ids)
+        # exit(0)
+
 
         outputs = self.model.generate(
-            inputs=input_ids,
+            inputs=input_ids.cuda(),
             max_new_tokens=256,
             do_sample=True,
             temperature=0.1,
@@ -128,6 +133,47 @@ class AnswerBot:
         # print(response_str)
         response_str = response_str[0:8].strip()
         return response_str
+
+    def completion_inference(self, prompt):
+        # from llama_index.core.llms import ChatMessage, MessageRole, ChatResponse
+        # _messages = []
+        # for m in messages:
+        #     if m['role'] == 'system':
+        #         _messages.append(ChatMessage(role=MessageRole.SYSTEM, content=m['content']))
+        #     elif m['role'] == 'user':
+        #         _messages.append(ChatMessage(role=MessageRole.USER, content=m['content']))
+        #     if m['role'] == 'assistant':
+        #         _messages.append(ChatMessage(role=MessageRole.ASSISTANT, content=m['content']))
+
+        # response = self.llm.app(_messages)
+        # response_str = response.message.content
+        input_ids = self.tokenizer.encode(
+            prompt,
+            # add_generation_prompt=True,
+            return_tensors="pt",
+            # tokenize=False,
+        )
+        # print(input_ids)
+        # exit(0)
+
+        outputs = self.model.generate(
+            inputs=input_ids.cuda(),
+            max_new_tokens=256,
+            do_sample=True,
+            temperature=0.1,
+            top_k=3,
+            top_p=0.6,
+            pad_token_id=self.tokenizer.eos_token_id
+        )
+
+        response = outputs[0][input_ids.shape[-1]:]
+        response_str = self.tokenizer.decode(response, skip_special_tokens=True)
+        # exit(0)
+
+        # print(response_str)
+        response_str = response_str[0:8].strip()
+        return response_str
+
 
 
 # def to_llama_format(message: list):
@@ -157,7 +203,9 @@ def create_optimized_prompt(row):
               f"B. {row['options']['B']}\n"
               f"C. {row['options']['C']}\n"
               f"D. {row['options']['D']}\n"
-              f"\nThe correct option is: ")
+              f"\nYou should select only one option from the options above.\n"
+              f"Then, the option you selected must be in ['A', 'B', 'C', 'D'], you should choose only one from this list."
+              f"\nSo, The correct option is:")
     return prompt
 
 
@@ -185,14 +233,14 @@ def run_evaluation(data_path: str, with_rag=False):
             answer = _data['answer']
             prompt = create_optimized_prompt(_data)
             # print(prompt)
-            #
             # exit(0)
 
             messages = []
             messages.append({"role": "user", "content": prompt})
-            messages.append({"role": "assistant", "content": answer})
+            # messages.append({"role": "assistant", "content": answer})
 
-            response = bot.inference(messages)
+            # response = bot.inference(messages)
+            response = bot.completion_inference(prompt)
 
             n_total += 1
             if answer == response:

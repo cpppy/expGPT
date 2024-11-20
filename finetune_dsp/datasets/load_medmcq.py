@@ -223,6 +223,96 @@ def preprocess_fixed(
     )
 
 
+def preprocess_fixed_simple(
+        sources,
+        tokenizer: transformers.PreTrainedTokenizer,
+        max_len: int,
+        system_message: str = "You are a helpful assistant."
+) -> Dict:
+    # roles = {"user": "<|im_start|>user", "assistant": "<|im_start|>assistant"}
+    #
+    # im_start = tokenizer.im_start_id
+    # im_end = tokenizer.im_end_id
+    #
+    # nl_tokens = tokenizer('\n').input_ids
+    # _system = tokenizer('system').input_ids + nl_tokens
+    # _user = tokenizer('user').input_ids + nl_tokens
+    # _assistant = tokenizer('assistant').input_ids + nl_tokens
+
+    # Apply prompt templates
+    input_ids, targets = [], []
+    for i, source in enumerate(sources):
+        # if roles[source[0]["from"]] != roles["user"]:
+        #     source = source[1:]
+
+        prompt = tokenizer.apply_chat_template(
+            conversation=source,
+            # add_generation_prompt=True,
+            return_tensors='pt',
+            tokenize=False,
+        )
+        print(prompt)
+        exit(0)
+
+        input_id, target = [], []
+
+        # # TODO: whether use system_prompt?
+        # system = [im_start] + _system + tokenizer(system_message).input_ids + [im_end] + nl_tokens
+        # input_id += system
+
+        # target += [im_start] + [IGNORE_TOKEN_ID] * (len(system) - 3) + [im_end] + nl_tokens
+        # assert len(input_id) == len(target)
+
+        print(source)
+        exit(0)
+
+        for j, sentence in enumerate(source):
+
+            role = roles[sentence["role"]]
+            # _input_id = tokenizer(role).input_ids + nl_tokens + \
+            #             tokenizer(sentence["content"]).input_ids + [im_end] + nl_tokens
+            # input_id += _input_id
+            # if role == '<|im_start|>user':
+            #     _target = [im_start] + [IGNORE_TOKEN_ID] * (len(_input_id) - 3) + [im_end] + nl_tokens
+            # elif role == '<|im_start|>assistant':
+            #     _target = [im_start] + [IGNORE_TOKEN_ID] * len(tokenizer(role).input_ids) + \
+            #               _input_id[len(tokenizer(role).input_ids) + 1:-2] + [im_end] + nl_tokens
+            # else:
+            #     raise NotImplementedError
+
+            if sentence['role'] == 'user':
+                _input_id = tokenizer(role).input_ids + nl_tokens + \
+                            tokenizer(sentence["content"]).input_ids + [im_end] + nl_tokens
+                _target = [IGNORE_TOKEN_ID] * len(_input_id)
+            elif sentence['role'] == 'assistant':
+                _input_id = tokenizer(role).input_ids + nl_tokens + \
+                            tokenizer(sentence["content"]).input_ids + [im_end] + nl_tokens
+                _target = copy.deepcopy(_input_id)
+                _target[0: len(tokenizer(role).input_ids + nl_tokens)] = [IGNORE_TOKEN_ID] * len(tokenizer(role).input_ids + nl_tokens)
+            else:
+                raise NotImplementedError
+
+            input_id += _input_id
+            target += _target
+        assert len(input_id) == len(target)
+        input_id += [tokenizer.pad_token_id] * (max_len - len(input_id))
+        target += [IGNORE_TOKEN_ID] * (max_len - len(target))
+        input_ids.append(input_id[:max_len])
+        targets.append(target[:max_len])
+
+    # print(input_ids)
+    # print(targets)
+    # exit(0)
+
+    input_ids = torch.tensor(input_ids, dtype=torch.int)
+    targets = torch.tensor(targets, dtype=torch.int)
+
+    return dict(
+        input_ids=input_ids,
+        labels=targets,
+        attention_mask=input_ids.ne(tokenizer.pad_token_id),
+    )
+
 
 
 class MedMCQ(Dataset):
@@ -236,7 +326,7 @@ class MedMCQ(Dataset):
 
         print_rank_0("Formatting inputs...")
         sources = [example["conversations"] for example in raw_data]
-        data_dict = preprocess_fixed(sources, tokenizer, max_len)
+        data_dict = preprocess_fixed_simple(sources, tokenizer, max_len)
 
         self.input_ids = data_dict["input_ids"]
         self.labels = data_dict["labels"]
@@ -330,6 +420,8 @@ def main():
     # )
     # print(text)
     # # model_inputs = tokenizer([text], return_tensors="pt").to(device)
+
+    samples = samples[0:10]
 
     max_len=512
     train_dataset = MedMCQ(samples, tokenizer=tokenizer, max_len=max_len)
