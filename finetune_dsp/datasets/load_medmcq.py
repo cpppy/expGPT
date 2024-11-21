@@ -245,29 +245,25 @@ def preprocess_fixed_simple(
         # if roles[source[0]["from"]] != roles["user"]:
         #     source = source[1:]
 
+        # print(tokenizer.get_chat_template().replace('-',  ''))
+        # exit(0)
+
+        chat_template = tokenizer.chat_template = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}"
+
         prompt = tokenizer.apply_chat_template(
             conversation=source,
             # add_generation_prompt=True,
+            chat_template=chat_template,
             return_tensors='pt',
             tokenize=False,
         )
-        print(prompt)
-        exit(0)
+        # print(source)
+        # print(prompt)
+        # exit(0)
 
         input_id, target = [], []
 
-        # # TODO: whether use system_prompt?
-        # system = [im_start] + _system + tokenizer(system_message).input_ids + [im_end] + nl_tokens
-        # input_id += system
-
-        # target += [im_start] + [IGNORE_TOKEN_ID] * (len(system) - 3) + [im_end] + nl_tokens
-        # assert len(input_id) == len(target)
-
-        print(source)
-        exit(0)
-
         for j, sentence in enumerate(source):
-
             role = roles[sentence["role"]]
             # _input_id = tokenizer(role).input_ids + nl_tokens + \
             #             tokenizer(sentence["content"]).input_ids + [im_end] + nl_tokens
@@ -312,7 +308,6 @@ def preprocess_fixed_simple(
         labels=targets,
         attention_mask=input_ids.ne(tokenizer.pad_token_id),
     )
-
 
 
 class MedMCQ(Dataset):

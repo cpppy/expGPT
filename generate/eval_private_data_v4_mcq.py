@@ -77,15 +77,16 @@ class AnswerBot:
         from peft import PeftModel
 
         # ###################### qwen2-0.5B ###################
-        model_path = '/data/Qwen2.5-0.5B-Instruct'
+        # model_path = '/data/Qwen2.5-0.5B-Instruct'
+        model_path = '/data/Qwen2.5-0.5B'
         # # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_ft_lora_huatuo2/checkpoint-110'
         # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_ft_lora_huatuo2_test/checkpoint-40'
 
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForCausalLM.from_pretrained(
-            # model_path,
+            model_path,
             # '/data/output/dsp_demo_saved',
-            '/data/output/dsp_demo_saved_2',
+            # '/data/output/dsp_demo_saved_2',
             device_map="auto",
             torch_dtype=torch.float16)
         # model = PeftModel.from_pretrained(model, model_id=lora_path)
@@ -149,7 +150,7 @@ class AnswerBot:
 
         outputs = self.model.generate(
             inputs=input_ids.cuda(),
-            max_new_tokens=256,
+            max_new_tokens=5,
             do_sample=True,
             temperature=0.1,
             top_k=3,
@@ -231,7 +232,7 @@ def run_evaluation(data_path: str, with_rag=False):
             # messages.append({"role": "assistant", "content": answer})
 
             # response = bot.inference(messages)
-            response = bot.completion_inference(prompt)
+            response = bot.completion_inference(prompt)[0:1]
 
             n_total += 1
             if answer == response:
