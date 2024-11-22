@@ -332,6 +332,43 @@ def main():
     #
     #     exit(0)
 
+    # DataLoaders creation:
+    if args.local_rank == -1:
+        train_sampler = RandomSampler(train_dataset)
+        eval_sampler = SequentialSampler(eval_dataset)
+    else:
+        train_sampler = DistributedSampler(train_dataset)
+        eval_sampler = DistributedSampler(eval_dataset)
+    train_dataloader = DataLoader(train_dataset,
+                                  collate_fn=default_data_collator,
+                                  sampler=train_sampler,
+                                  batch_size=args.per_device_train_batch_size)
+    eval_dataloader = DataLoader(eval_dataset,
+                                 collate_fn=default_data_collator,
+                                 sampler=eval_sampler,
+                                 batch_size=args.per_device_eval_batch_size)
+
+    def evaluation(model, eval_dataloader):
+        model.eval()
+        losses = 0
+        for step, batch in enumerate(eval_dataloader):
+            batch = to_device(batch, device)
+            with torch.no_grad():
+                outputs = model(**batch)
+
+            loss = outputs.loss
+            losses += loss.float()
+        losses = losses / (step + 1)
+        try:
+            losses = get_all_reduce_mean(losses)
+        except:
+            pass
+        try:
+            perplexity = torch.exp(losses).item()
+        except OverflowError:
+            perplexity = float("inf")
+        return perplexity, losses.item()
+
 
 
 

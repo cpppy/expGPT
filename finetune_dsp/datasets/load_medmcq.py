@@ -321,7 +321,7 @@ class MedMCQ(Dataset):
 
         print_rank_0("Formatting inputs...")
         sources = [example["conversations"] for example in raw_data]
-        data_dict = preprocess_fixed_simple(sources, tokenizer, max_len)
+        data_dict = preprocess_fixed(sources, tokenizer, max_len)
 
         self.input_ids = data_dict["input_ids"]
         self.labels = data_dict["labels"]
@@ -422,15 +422,12 @@ def main():
     train_dataset = MedMCQ(samples, tokenizer=tokenizer, max_len=max_len)
     print_rank_0(f'n_train_sample: {len(train_dataset)}')
 
-    # for s in train_dataset:
-    #     # print(s['labels'][0])
-    #     # print(tokenizer.decode(s['input_ids'], skip_special_tokens=False))
-    #
-    #     print(tokenizer.decode(s['input_ids'][s['labels']>0], skip_special_tokens=False))
-    #
-    #     # print(s['attention_mask'])
-    #
-    #     # exit(0)
+    for s in train_dataset:
+        # print(s['labels'][0])
+        print(tokenizer.decode(s['input_ids'], skip_special_tokens=False))
+        print(tokenizer.decode(s['labels'][s['attention_mask']>0], skip_special_tokens=False))
+        print(s['attention_mask'])
+        exit(0)
 
     return train_dataset
 
