@@ -22,7 +22,11 @@ import deepspeed
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed import get_accelerator
 
-from dschat.utils.data.data_utils import create_prompt_dataset
+import sys
+sys.path.append('..')
+
+
+# from dschat.utils.data.data_utils import create_prompt_dataset
 from dschat.utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
 from dschat.utils.ds_utils import get_train_ds_config
 from dschat.utils.module.lora import convert_linear_layer_to_lora, convert_lora_to_linear_layer, only_optimize_lora_parameters, make_model_gradient_checkpointing_compatible
@@ -34,6 +38,10 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('[expGPT]')
 logger.setLevel(level=logging.DEBUG)
+from tqdm import tqdm
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -42,7 +50,10 @@ def parse_args():
     parser.add_argument('--data_path',
                         nargs='*',
                         # default=['Dahoas/rm-static'],
-                        default=["wangrui6/Zhihu-KOL"],
+                        # default=["wangrui6/Zhihu-KOL"],
+                        default=[
+                            # "/data/data/llm_data/Zhihu-KOL",
+                        ],
                         help='Path to the training dataset. Accepted format:'
                         '1) a single data path, 2) multiple datasets in the'
                         'form: dataset1-path dataset2-path ...')
@@ -56,19 +67,22 @@ def parse_args():
     parser.add_argument(
         '--sft_only_data_path',
         nargs='*',
-        default=[],
+        default=[
+            "/data/data/llm_data/Zhihu-KOL",
+        ],
         help='Path to the dataset for only using in SFT phase.')
     parser.add_argument(
         '--data_output_path',
         type=str,
-        default='/data/data/dsp_data_files/',
+        default='/mnt2/data/dsp_data_files',
         help=
         'Where to store the data-related files such as shuffle index. This needs to be on a local storage of a node (not on a shared storage)'
     )
     parser.add_argument(
         "--model_name_or_path",
         type=str,
-        default="/data/Qwen2.5-0.5B-Instruct",
+        # default="/data/Qwen2.5-0.5B-Instruct",
+        default="/data/Qwen/Qwen2-0.5B-Instruct",
         help=
         "Path to pretrained model or model identifier from huggingface.co/models.",
         # required=True,
@@ -76,25 +90,25 @@ def parse_args():
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=16,
+        default=64,
         help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
         type=int,
-        default=16,
+        default=64,
         help="Batch size (per device) for the evaluation dataloader.",
     )
     parser.add_argument(
         "--max_seq_len",
         type=int,
-        default=512,
+        default=256,
         help="The maximum sequence length.",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-3,
+        default=1e-5,
         help=
         "Initial learning rate (after the potential warmup period) to use.",
     )
@@ -130,7 +144,7 @@ def parse_args():
         help="Number of steps for the warmup in the lr scheduler.")
     parser.add_argument("--output_dir",
                         type=str,
-                        default='/data/output/dsp_model_output',
+                        default='/mnt2/output/dsp_model_output',
                         help="Where to store the model.")
     parser.add_argument("--seed",
                         type=int,
@@ -208,7 +222,9 @@ def parse_args():
     )
     ## Print loss
     parser.add_argument('--print_loss',
-                        action='store_true',
+                        # action='store_true',
+                        type=bool,
+                        default=True,
                         help='Prints loss at each step.')
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
@@ -267,18 +283,18 @@ def main():
     # base_model_path = "/data/Qwen2.5-0.5B-Instruct"
     # tokenizer = AutoTokenizer.from_pretrained(
     #     pretrained_model_name_or_path=base_model_path,
-    #     model_max_length=512,
+    #     model_max_length=256,
     #     padding_side="right",
     #     use_fast=False,
     #     trust_remote_code=True,
     # )
 
-    # model = create_hf_model(AutoModelForCausalLM,
-    #                         args.model_name_or_path,
-    #                         tokenizer,
-    #                         ds_config,
-    #                         dropout=args.dropout)
-    #
+    model = create_hf_model(AutoModelForCausalLM,
+                            args.model_name_or_path,
+                            tokenizer,
+                            ds_config,
+                            dropout=args.dropout)
+
     # if args.compute_fp32_loss:
     #     print_rank_0(
     #         f"Using model {model.__class__.__name__} with loss in fp32",
@@ -295,32 +311,33 @@ def main():
 
     train_phase = 1
 
-    from dschat.utils.data.data_utils import create_prompt_dataset
+    # from dschat.utils.data.data_utils import create_prompt_dataset
+    from finetune_dsp.datasets_dsp.create_custom_dataset import create_prompt_dataset
     train_dataset, eval_dataset = create_prompt_dataset(
-        args.local_rank,
-        args.data_path,
-        args.data_split,
-        args.data_output_path,
-        train_phase,
-        args.seed,
-        tokenizer,
-        args.max_seq_len,
+        local_rank=args.local_rank,
+        data_path=args.data_path,
+        data_split=args.data_split,
+        output_path=args.data_output_path,
+        train_phase=train_phase,
+        seed=args.seed,
+        tokenizer=tokenizer,
+        max_seq_len=args.max_seq_len,
         end_of_conversation_token=tokenizer.eos_token,
         sft_only_data_path=args.sft_only_data_path)
 
     logger.info(f'train_dataset_len: {len(train_dataset)}')
     logger.info(f'eval_dataset_len: {len(eval_dataset)}')
 
-    for s in train_dataset:
-        print(s)
-        for k, v in s.items():
-            print(k, v.shape)
-        print(f'====================== input_ids ======================')
-        print(tokenizer.decode(s['input_ids'][s['attention_mask'] == 1], skip_special_tokens=False))
-        print(f'====================== labels ======================')
-        # print(tokenizer.decode(s['labels'][s['labels'] >= 0], skip_special_tokens=False))
-        print(tokenizer.decode(s['labels'][s['attention_mask'] == 1], skip_special_tokens=False))
-        exit(0)
+    # for s in train_dataset:
+    #     print(s)
+    #     for k, v in s.items():
+    #         print(k, v.shape)
+    #     print(f'====================== input_ids ======================')
+    #     print(tokenizer.decode(s['input_ids'][s['attention_mask'] == 1], skip_special_tokens=False))
+    #     print(f'====================== labels ======================')
+    #     # print(tokenizer.decode(s['labels'][s['labels'] >= 0], skip_special_tokens=False))
+    #     print(tokenizer.decode(s['labels'][s['attention_mask'] == 1], skip_special_tokens=False))
+    #     exit(0)
 
     # ################# unsupervised dataset ################
     # from dschat.utils.data.data_utils import get_unsupervised_data
@@ -351,6 +368,7 @@ def main():
     def evaluation(model, eval_dataloader):
         model.eval()
         losses = 0
+        pbar = tqdm(total=len(eval_dataloader), desc='[EVAL]')
         for step, batch in enumerate(eval_dataloader):
             batch = to_device(batch, device)
             with torch.no_grad():
@@ -358,6 +376,9 @@ def main():
 
             loss = outputs.loss
             losses += loss.float()
+            pbar.update(1)
+        pbar.close()
+
         losses = losses / (step + 1)
         try:
             losses = get_all_reduce_mean(losses)
@@ -368,6 +389,92 @@ def main():
         except OverflowError:
             perplexity = float("inf")
         return perplexity, losses.item()
+
+
+
+    # Split weights in two groups, one with weight decay and the other not.
+    optimizer_grouped_parameters = get_optimizer_grouped_parameters(
+        model, args.weight_decay, args.lora_learning_rate)
+
+    AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
+    optimizer = AdamOptimizer(optimizer_grouped_parameters,
+                              lr=args.learning_rate,
+                              betas=(0.9, 0.95))
+
+    num_update_steps_per_epoch = math.ceil(
+        len(train_dataloader) / args.gradient_accumulation_steps)
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=args.num_warmup_steps,
+        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,
+    )
+
+    model, optimizer, _, lr_scheduler = deepspeed.initialize(
+        model=model,
+        optimizer=optimizer,
+        args=args,
+        config=ds_config,
+        lr_scheduler=lr_scheduler,
+        dist_init_required=True)
+
+    if args.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
+
+    ###################### EVAL #####################
+    # Train!
+    print_rank_0("***** Running training *****", args.global_rank)
+    print_rank_0(
+        f"***** Evaluating perplexity, Epoch {0}/{args.num_train_epochs} *****",
+        args.global_rank)
+    perplexity, eval_loss = evaluation(model, eval_dataloader)
+    print_rank_0(f"ppl: {perplexity}, loss: {eval_loss}", args.global_rank)
+    exit(0)
+
+    for epoch in range(args.num_train_epochs):
+        print_rank_0(
+            f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
+            args.global_rank)
+        model.train()
+        import time
+        for step, batch in enumerate(train_dataloader):
+            start = time.time()
+            batch = to_device(batch, device)
+            outputs = model(**batch, use_cache=False)
+            loss = outputs.loss
+            if args.print_loss and step % 100 == 0:
+                print(
+                    f"Epoch: {epoch}, Step: {step}, Rank: {torch.distributed.get_rank()}, loss = {loss}"
+                )
+            model.backward(loss)
+            model.step()
+            end = time.time()
+            if torch.distributed.get_rank() == 0:
+                print_throughput(model.model, args, end - start,
+                                 args.global_rank)
+
+        # Evaluate perplexity on the validation set.
+        print_rank_0(
+            f"***** Evaluating perplexity, Epoch {epoch+1}/{args.num_train_epochs} *****",
+            args.global_rank)
+        perplexity, eval_loss = evaluation(model, eval_dataloader)
+        print_rank_0(f"ppl: {perplexity}, loss: {eval_loss}", args.global_rank)
+        model.tput_timer.update_epoch_count()
+
+    if args.output_dir is not None:
+        print_rank_0('saving the final model ...', args.global_rank)
+        model = convert_lora_to_linear_layer(model)
+
+        if args.global_rank == 0:
+            save_hf_format(model, tokenizer, args)
+
+        if args.zero_stage == 3:
+            # For zero stage 3, each gpu only has a part of the model, so we need a special save function
+            save_zero_three_model(model,
+                                  args.global_rank,
+                                  args.output_dir,
+                                  zero_stage=args.zero_stage)
+
 
 
 
