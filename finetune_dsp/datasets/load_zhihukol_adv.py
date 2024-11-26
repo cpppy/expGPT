@@ -9,6 +9,7 @@ from dschat.utils.utils import print_rank_0
 # from finetune_qwen.datasets.load_dataset_private_qa import preprocess
 
 from tqdm import tqdm
+import glob
 
 
 def example_by_gpt4():
@@ -139,7 +140,7 @@ def preprocess(
     # exit(0)
 
     input_ids = torch.tensor(input_ids, dtype=torch.int)
-    targets = torch.tensor(targets, dtype=torch.int)
+    targets = torch.tensor(targets, dtype=torch.int64)
 
     return dict(
         input_ids=input_ids,
@@ -229,18 +230,19 @@ def preprocess_fixed(
     )
 
 
-class MedMCQ(Dataset):
+class CustomQADataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
     def __init__(self,
                  raw_data,
                  tokenizer: transformers.PreTrainedTokenizer,
-                 max_len: int):
-        super(MedMCQ, self).__init__()
+                 max_len: int,
+                 scratch: bool=False):
+        super(CustomQADataset, self).__init__()
 
         print_rank_0("Formatting inputs...")
         sources = [example["conversations"] for example in raw_data]
-        data_dict = preprocess_fixed(sources, tokenizer, max_len)
+        data_dict = preprocess_fixed(sources, tokenizer, max_len, scratch)
 
         self.input_ids = data_dict["input_ids"]
         self.labels = data_dict["labels"]
@@ -256,54 +258,56 @@ class MedMCQ(Dataset):
             attention_mask=self.attention_mask[i],
         )
 
+#
+# def create_optimized_prompt(row):
+#     # 构造解释性更强、指示性更明确的格式
+#     # prompt = (f"Read the question and choose the correct option based on the options given.\n\n"
+#     #           f"Question: {row['question']}\n"
+#     #           f"Options:\n"
+#     #           f"A. {row['A']}\n"
+#     #           f"B. {row['B']}\n"
+#     #           f"C. {row['C']}\n"
+#     #           f"D. {row['D']}\n"
+#     #           f"\nThe correct option is: ")
+#     prompt = (f"Read the question and choose the correct option based on the options given.\n\n"
+#               f"Question: {row['question']}\n"
+#               f"Options:\n"
+#               f"A. {row['opa']}\n"
+#               f"B. {row['opb']}\n"
+#               f"C. {row['opc']}\n"
+#               f"D. {row['opd']}\n"
+#               f"\nThe correct option is: ")
+#     return prompt
 
-def create_optimized_prompt(row):
-    # 构造解释性更强、指示性更明确的格式
-    # prompt = (f"Read the question and choose the correct option based on the options given.\n\n"
-    #           f"Question: {row['question']}\n"
-    #           f"Options:\n"
-    #           f"A. {row['A']}\n"
-    #           f"B. {row['B']}\n"
-    #           f"C. {row['C']}\n"
-    #           f"D. {row['D']}\n"
-    #           f"\nThe correct option is: ")
-    prompt = (f"Read the question and choose the correct option based on the options given.\n\n"
-              f"Question: {row['question']}\n"
-              f"Options:\n"
-              f"A. {row['opa']}\n"
-              f"B. {row['opb']}\n"
-              f"C. {row['opc']}\n"
-              f"D. {row['opd']}\n"
-              f"\nThe correct option is: ")
-    return prompt
 
-
-def main():
+def build_dataset(tokenizer, max_len=256, eval_ratio=0.1, scratch=False):
 
     samples = []
-    data_paths = [
-        # '/data/data/llm_datasets/medmcqa/data/train-00000-of-00001.parquet',
-        '/data/data/llm_data/medmcqa/data/train-00000-of-00001.parquet',
-    ]
+    # data_paths = [
+    #     '/data/data/llm_data/Zhihu-KOL/data/train-00000-of-00005-a1278ede4e8c5cdb.parquet',
+    # ]
+    raw_dir = '/data/data/llm_data/Zhihu-KOL'
+    data_paths = glob.glob(f'{raw_dir}/data/*.parquet')
+    data_paths = sorted(data_paths)
     for data_path in data_paths:
         print_rank_0(f'data_path: {data_path}')
         df = pd.read_parquet(data_path)
-        df['optimized_prompt'] = df.apply(create_optimized_prompt, axis=1)
-        df['answer'] = df.apply(lambda x: 'ABCDEFGH'[x['cop']], axis=1)
-        df = df[['optimized_prompt', 'answer']]
+        # df['optimized_prompt'] = df.apply(create_optimized_prompt, axis=1)
+        # df['answer'] = df.apply(lambda x: 'ABCDEFGH'[x['cop']], axis=1)
+        # df = df[['optimized_prompt', 'answer']]
         print(f'n_raw_sample: {df.shape[0]}')
-        raw_datas = df.to_dict(orient='records')[0:50000]
+        raw_datas = df.to_dict(orient='records')#[0:500]
         # print(raw_datas[0])
         # exit(0)
-        choice_types = set([x['answer'] for x in raw_datas])
-        print_rank_0(f'unique_choice: {choice_types}')
+        # choice_types = set([x['answer'] for x in raw_datas])
+        # print_rank_0(f'unique_choice: {choice_types}')
 
         for data in raw_datas:
             try:
-                data = {k.strip(): v.strip() for k, v in data.items()}
+                # data = {k.strip(): v.strip() for k, v in data.items()}
                 messages = []
-                messages.append({"role": "user", "content": data['optimized_prompt']})
-                messages.append({"role": "assistant", "content": data['answer']
+                messages.append({"role": "user", "content": data['INSTRUCTION']})
+                messages.append({"role": "assistant", "content": data['RESPONSE']
                                  })
                 # print(messages)
                 samples.append(dict(conversations=messages))
@@ -312,11 +316,33 @@ def main():
                 print(e)
                 continue
 
+    split_pos = int(len(samples)*(1-eval_ratio))
+    train_dataset = CustomQADataset(samples[:split_pos], tokenizer=tokenizer, max_len=max_len, scratch=scratch)
+    print_rank_0(f'n_train_sample: {len(train_dataset)}')
+
+    # for s in train_dataset:
+    #     # print(s['labels'][0])
+    #     print(tokenizer.decode(s['input_ids'], skip_special_tokens=False))
+    #     print(tokenizer.decode(s['input_ids'][s['attention_mask']], skip_special_tokens=False))
+    #     print(s['attention_mask'])
+    #     print(s['labels'])
+    #     s['labels'][s['labels'] < 0] = tokenizer.pad_token_id
+    #     print(tokenizer.decode(s['labels'], skip_special_tokens=False))
+    #     exit(0)
+
+    eval_dataset = CustomQADataset(samples[split_pos:], tokenizer=tokenizer, max_len=max_len, scratch=scratch)
+    print_rank_0(f'n_eval_sample: {len(eval_dataset)}')
+
+    return train_dataset, eval_dataset
+
+
+if __name__=='__main__':
+
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         # pretrained_model_name_or_path="/data/Qwen2.5-0.5B-Instruct",
         pretrained_model_name_or_path="/data/Qwen/Qwen2-0.5B-Instruct",
         # cache_dir=training_args.cache_dir,
-        model_max_length=256,
+        model_max_length=512,
         padding_side="right",
         use_fast=False,
         trust_remote_code=True,
@@ -341,24 +367,5 @@ def main():
 
     # samples = samples[0:10]
 
-    max_len=256
-    train_dataset = MedMCQ(samples, tokenizer=tokenizer, max_len=max_len)
-    print_rank_0(f'n_train_sample: {len(train_dataset)}')
-
-    for s in train_dataset:
-        # print(s['labels'][0])
-        print(tokenizer.decode(s['input_ids'], skip_special_tokens=False))
-        print(tokenizer.decode(s['input_ids'][s['attention_mask']], skip_special_tokens=False))
-        print(s['attention_mask'])
-        print(s['labels'])
-        s['labels'][s['labels'] < 0] = tokenizer.pad_token_id
-        print(tokenizer.decode(s['labels'], skip_special_tokens=False))
-        exit(0)
-
-    return train_dataset
-
-
-if __name__=='__main__':
-
-    main()
+    build_dataset(tokenizer, max_len=512)
 

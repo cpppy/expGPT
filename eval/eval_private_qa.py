@@ -127,9 +127,10 @@ class AnswerBot:
         # lora_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_7_qlora_prv_qa_exp6/checkpoint-1000'
 
         # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa_exp7_plus/checkpoint-300'
-        model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa2_exp8_plus/checkpoint-561'
+        # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa2_exp8_plus/checkpoint-561'
+        model_path = '/mnt2/output/dsp_model_output'
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        tokenizer = AutoTokenizer.from_pretrained('/data/Qwen/Qwen2-0.5B-Instruct')
 
         from transformers import BitsAndBytesConfig
         bnb_config = BitsAndBytesConfig(

@@ -74,7 +74,7 @@ def parse_args():
     parser.add_argument(
         '--data_output_path',
         type=str,
-        default='/mnt2/data/dsp_data_files',
+        default='/mnt2/data/dsp_data_files2',
         help=
         'Where to store the data-related files such as shuffle index. This needs to be on a local storage of a node (not on a shared storage)'
     )
@@ -90,13 +90,13 @@ def parse_args():
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=64,
+        default=8,
         help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
         type=int,
-        default=64,
+        default=8,
         help="Batch size (per device) for the evaluation dataloader.",
     )
     parser.add_argument(
@@ -144,7 +144,7 @@ def parse_args():
         help="Number of steps for the warmup in the lr scheduler.")
     parser.add_argument("--output_dir",
                         type=str,
-                        default='/mnt2/output/dsp_model_output',
+                        default='/mnt2/output/dsp_model_output2',
                         help="Where to store the model.")
     parser.add_argument("--seed",
                         type=int,
@@ -311,19 +311,24 @@ def main():
 
     train_phase = 1
 
-    # from dschat.utils.data.data_utils import create_prompt_dataset
-    from finetune_dsp.datasets_dsp.create_custom_dataset import create_prompt_dataset
-    train_dataset, eval_dataset = create_prompt_dataset(
-        local_rank=args.local_rank,
-        data_path=args.data_path,
-        data_split=args.data_split,
-        output_path=args.data_output_path,
-        train_phase=train_phase,
-        seed=args.seed,
-        tokenizer=tokenizer,
-        max_seq_len=args.max_seq_len,
-        end_of_conversation_token=tokenizer.eos_token,
-        sft_only_data_path=args.sft_only_data_path)
+    # # from dschat.utils.data.data_utils import create_prompt_dataset
+    # from finetune_dsp.datasets_dsp.create_custom_dataset import create_prompt_dataset
+    # train_dataset, eval_dataset = create_prompt_dataset(
+    #     local_rank=args.local_rank,
+    #     data_path=args.data_path,
+    #     data_split=args.data_split,
+    #     output_path=args.data_output_path,
+    #     train_phase=train_phase,
+    #     seed=args.seed,
+    #     tokenizer=tokenizer,
+    #     max_seq_len=args.max_seq_len,
+    #     end_of_conversation_token=tokenizer.eos_token,
+    #     sft_only_data_path=args.sft_only_data_path)
+
+    from finetune_dsp.datasets.load_zhihukol_adv import build_dataset
+    tokenizer.im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
+    tokenizer.im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    train_dataset, eval_dataset = build_dataset(tokenizer=tokenizer, max_len=args.max_seq_len)
 
     logger.info(f'train_dataset_len: {len(train_dataset)}')
     logger.info(f'eval_dataset_len: {len(eval_dataset)}')
@@ -370,6 +375,7 @@ def main():
         losses = 0
         pbar = tqdm(total=len(eval_dataloader), desc='[EVAL]')
         for step, batch in enumerate(eval_dataloader):
+            batch['labels'] = batch['labels'].type(torch.int64)
             batch = to_device(batch, device)
             with torch.no_grad():
                 outputs = model(**batch)
@@ -438,10 +444,11 @@ def main():
         import time
         for step, batch in enumerate(train_dataloader):
             start = time.time()
+            batch['labels'] = batch['labels'].type(torch.int64)
             batch = to_device(batch, device)
             outputs = model(**batch, use_cache=False)
             loss = outputs.loss
-            if args.print_loss and step % 100 == 0:
+            if args.print_loss and step % 1 == 0:
                 print(
                     f"Epoch: {epoch}, Step: {step}, Rank: {torch.distributed.get_rank()}, loss = {loss}"
                 )
@@ -460,19 +467,19 @@ def main():
         print_rank_0(f"ppl: {perplexity}, loss: {eval_loss}", args.global_rank)
         model.tput_timer.update_epoch_count()
 
-    if args.output_dir is not None:
-        print_rank_0('saving the final model ...', args.global_rank)
-        model = convert_lora_to_linear_layer(model)
-
-        if args.global_rank == 0:
-            save_hf_format(model, tokenizer, args)
-
-        if args.zero_stage == 3:
-            # For zero stage 3, each gpu only has a part of the model, so we need a special save function
-            save_zero_three_model(model,
-                                  args.global_rank,
-                                  args.output_dir,
-                                  zero_stage=args.zero_stage)
+    # if args.output_dir is not None:
+    #     print_rank_0('saving the final model ...', args.global_rank)
+    #     model = convert_lora_to_linear_layer(model)
+    #
+    #     if args.global_rank == 0:
+    #         save_hf_format(model, tokenizer, args)
+    #
+    #     if args.zero_stage == 3:
+    #         # For zero stage 3, each gpu only has a part of the model, so we need a special save function
+    #         save_zero_three_model(model,
+    #                               args.global_rank,
+    #                               args.output_dir,
+    #                               zero_stage=args.zero_stage)
 
 
 
