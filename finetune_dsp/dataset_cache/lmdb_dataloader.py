@@ -66,11 +66,13 @@ class LMDBSearch(object):
 
 class CustomInstructDataset(Dataset):
 
-    def __init__(self):
+    def __init__(self, db_path, max_len=256):
         super(CustomInstructDataset, self).__init__()
-        self.lmdb_search = LMDBSearch(db_path='/mnt2/data/dsp_data_files2/zhihukol_train_tokenizerQwen2_cache_20241126.lmdb')
+        assert db_path is not None
+        self.lmdb_search = LMDBSearch(db_path=db_path)
         self.keys = self.lmdb_search.keys
         self.len = self.lmdb_search.length
+        self.max_len = max_len
 
     def __len__(self):
         return self.len
@@ -80,8 +82,8 @@ class CustomInstructDataset(Dataset):
         # print(sample)
         # exit(0)
         input_ids = sample['input_ids']
-        labels = sample['lables']
-        max_len = 256
+        labels = sample['labels']
+        max_len = self.max_len
         ################## padding or clip ##################
         input_ids += [151643] * max(0, max_len - len(input_ids))
         labels += [-100] * max(0, max_len - len(labels))
@@ -94,14 +96,16 @@ class CustomInstructDataset(Dataset):
 
         return dict(
             input_ids=input_ids,
-            labels=labels,
+            labels=labels.type(torch.int64),
             attention_mask=attention_mask,
         )
 
 
 if __name__ == '__main__':
 
-    search_api = LMDBSearch(db_path='/mnt2/data/dsp_data_files2/zhihukol_train_tokenizerQwen2_cache_20241126.lmdb')
+    search_api = LMDBSearch(
+        db_path='/mnt2/data/dsp_data_files2/zhihu-kol_train_tokenizerQwen2_cache_20241126.lmdb'
+    )
 
     print(search_api.keys[0:10])
 
@@ -114,6 +118,8 @@ if __name__ == '__main__':
     # print(search_api.length)
     # print(search_api.keys[0:10])
 
-    dataset = CustomInstructDataset()
-    print(dataset.__getitem__(1))
+    dataset = CustomInstructDataset(
+        db_path='/mnt2/data/dsp_data_files2/zhihu-kol_train_tokenizerQwen2_cache_20241126.lmdb'
+    )
+    print(dataset.__getitem__(0))
 

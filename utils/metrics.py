@@ -4,7 +4,9 @@ import torch.nn.functional as F
 import torch
 import numpy as np
 
-class LossAverage(object):
+
+
+class AverageMetric(object):
     """Computes and stores the average and current value for calculate average loss"""
     def __init__(self):
         self.reset()
@@ -19,8 +21,27 @@ class LossAverage(object):
         self.val = val
         self.sum += val * n
         self.count += n
-        self.avg = round(self.sum / self.count, 4)
+        self.avg = round(self.sum / self.count, 5)
         # print(self.val)
+
+
+# class LossAverage(object):
+#     """Computes and stores the average and current value for calculate average loss"""
+#     def __init__(self):
+#         self.reset()
+#
+#     def reset(self):
+#         self.val = 0
+#         self.avg = 0
+#         self.sum = 0
+#         self.count = 0
+#
+#     def update(self, val, n=1):
+#         self.val = val
+#         self.sum += val * n
+#         self.count += n
+#         self.avg = round(self.sum / self.count, 4)
+#         # print(self.val)
 
 class DiceAverage(object):
     """Computes and stores the average and current value for calculate average loss"""
