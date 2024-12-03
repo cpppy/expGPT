@@ -6,4 +6,7 @@
 */*/*/__pycache__
 ./model_design_babylm/gpt2-vocab.json
 ./model_design_babylm/vocab.json
+*/*.json
+*/*.jsonl
+./data
 

@@ -168,19 +168,35 @@ def trans_dataset_to_lmdb():
     tokenizer.im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
     tokenizer.im_end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
 
-    # from finetune_dsp.dataset_cache.custom_dataset import build_dataset
-    # train_dataset, eval_dataset = build_dataset(tokenizer=tokenizer, eval_ratio=0.05)
-    from finetune_dsp.dataset_cache.custom_dataset_multi import build_dataset
+    # # from finetune_dsp.dataset_cache.custom_dataset import build_dataset
+    # # train_dataset, eval_dataset = build_dataset(tokenizer=tokenizer, eval_ratio=0.05)
+    # from finetune_dsp.dataset_cache.custom_dataset_multi import build_dataset
+    # train_dataset, eval_dataset = build_dataset(eval_ratio=0.05)
+    #
+    # ds2lmdb_tool = Dataset2Lmdb(dataset=train_dataset,
+    #                             lmdb_path=f'/mnt2/data/dsp_data_files2/{train_dataset.datasetname}_train_tokenizerQwen25_cache_20241126.lmdb',
+    #                             key_tag=train_dataset.datasetname,
+    #                             num_workers=4)
+    # ds2lmdb_tool.generate_for_text()
+    #
+    # ds2lmdb_tool = Dataset2Lmdb(dataset=eval_dataset,
+    #                             lmdb_path=f'/mnt2/data/dsp_data_files2/{eval_dataset.datasetname}_eval_tokenizerQwen25_cache_20241126.lmdb',
+    #                             key_tag=eval_dataset.datasetname,
+    #                             num_workers=4)
+    #
+    # ds2lmdb_tool.generate_for_text()
+
+    from finetune_dsp.dataset_cache.custom_dataset_multi2 import build_dataset
     train_dataset, eval_dataset = build_dataset(eval_ratio=0.05)
 
     ds2lmdb_tool = Dataset2Lmdb(dataset=train_dataset,
-                                lmdb_path=f'/mnt2/data/dsp_data_files2/{train_dataset.datasetname}_train_tokenizerQwen25_cache_20241126.lmdb',
+                                lmdb_path=f'/mnt2/data/dsp_data_files2/{train_dataset.datasetname}_train_tokenizerQwen25_cache_20241129.lmdb',
                                 key_tag=train_dataset.datasetname,
                                 num_workers=4)
     ds2lmdb_tool.generate_for_text()
 
     ds2lmdb_tool = Dataset2Lmdb(dataset=eval_dataset,
-                                lmdb_path=f'/mnt2/data/dsp_data_files2/{eval_dataset.datasetname}_eval_tokenizerQwen25_cache_20241126.lmdb',
+                                lmdb_path=f'/mnt2/data/dsp_data_files2/{eval_dataset.datasetname}_eval_tokenizerQwen25_cache_20241129.lmdb',
                                 key_tag=eval_dataset.datasetname,
                                 num_workers=4)
 

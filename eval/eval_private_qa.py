@@ -128,7 +128,7 @@ class AnswerBot:
 
         # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa_exp7_plus/checkpoint-300'
         # model_path = '/mnt2/expGPT/finetune_qwen/output_qwen2_0.5b_fullp_prv_qa2_exp8_plus/checkpoint-561'
-        model_path = '/mnt2/output/dsp_model_output'
+        model_path = '/mnt2/output/dsp_model_medical_ft1'
 
         tokenizer = AutoTokenizer.from_pretrained('/data/Qwen/Qwen2-0.5B-Instruct')
 
@@ -184,7 +184,7 @@ class AnswerBot:
         response_str = self.tokenizer.decode(response, skip_special_tokens=True)
         # exit(0)
 
-        # print(response_str)
+        print(response_str)
         response_str = response_str[0:1]
         return response_str
 
@@ -241,16 +241,6 @@ def generate_message(question: str,
         }
     ]
     return message
-
-
-# def to_llama_format(message: list):
-#     system_message, *other_messages, user_message = message
-#     system_promt = system_message["content"]
-#     user_prompt = user_message["content"]
-#     return f"""<s>[INST] <<SYS>>
-#     {system_promt}
-#     <</SYS>>
-#     {user_prompt} [/INST]"""
 
 
 def run_evaluation(data_path: str, with_rag=False):

@@ -19,7 +19,6 @@ from deepspeed.accelerator import get_accelerator
 
 
 def get_raw_dataset(dataset_name, output_path, seed, local_rank):
-
     if "Dahoas/rm-static" in dataset_name:
         return raw_datasets.DahoasRmstaticDataset(output_path, seed,
                                                   local_rank, dataset_name)
@@ -121,7 +120,7 @@ def get_raw_dataset_split_index(local_rank,
         for split_i in range(len(splits)):
             shuffle_idx_split_file_name = f"{output_path}/{dataset_name}_seed{seed}_{split_name}_{data_split}_{split_i}.npy"
             shuffle_idx_split = shuffle_idx[
-                splits_index[split_i]:splits_index[split_i + 1]]
+                                splits_index[split_i]:splits_index[split_i + 1]]
             np.save(shuffle_idx_split_file_name,
                     shuffle_idx_split,
                     allow_pickle=True)
@@ -150,19 +149,19 @@ class PromptDataset(Dataset):
         if self.train_phase == 1:
             return {
                 "input_ids":
-                self.chosen_dataset[idx]["input_ids"],
+                    self.chosen_dataset[idx]["input_ids"],
                 "attention_mask":
-                self.chosen_dataset[idx]["attention_mask"],
+                    self.chosen_dataset[idx]["attention_mask"],
                 "labels":
-                torch.where(self.chosen_dataset[idx]["attention_mask"].bool(),
-                            self.chosen_dataset[idx]["input_ids"], -100)
+                    torch.where(self.chosen_dataset[idx]["attention_mask"].bool(),
+                                self.chosen_dataset[idx]["input_ids"], -100)
             }
         elif self.train_phase == 2:
             return self.chosen_dataset[idx]["input_ids"], self.chosen_dataset[idx]["attention_mask"], \
-                self.reject_dataset[idx]["input_ids"], self.reject_dataset[idx]["attention_mask"]
+                   self.reject_dataset[idx]["input_ids"], self.reject_dataset[idx]["attention_mask"]
         elif self.train_phase == 3:
-            return self.prompt_dataset[idx]["input_ids"],self.prompt_dataset[idx]["attention_mask"], \
-                self.pad_token_id
+            return self.prompt_dataset[idx]["input_ids"], self.prompt_dataset[idx]["attention_mask"], \
+                   self.pad_token_id
 
 
 def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
@@ -387,12 +386,12 @@ class DataCollatorReward:
 
     def __call__(self, data):
         batch = {}
-        batch["input_ids"] = torch.cat([f[0]
-                                        for f in data] + [f[2] for f in data],
-                                       dim=0)
-        batch["attention_mask"] = torch.cat([f[1] for f in data] +
-                                            [f[3] for f in data],
-                                            dim=0)
+        batch["input_ids"] = torch.cat(
+            [f[0] for f in data] + [f[2] for f in data],
+            dim=0)
+        batch["attention_mask"] = torch.cat(
+            [f[1] for f in data] + [f[3] for f in data],
+            dim=0)
         return batch
 
 
@@ -467,7 +466,7 @@ def get_unsupervised_data(args, tokenizer):
         # Split by chunks of max_len.
         result = {
             k:
-            [t[i:i + block_size] for i in range(0, total_length, block_size)]
+                [t[i:i + block_size] for i in range(0, total_length, block_size)]
             for k, t in concatenated_examples.items()
         }
         result["labels"] = result["input_ids"].copy()
@@ -513,7 +512,7 @@ class MiniDataset:
                     })
                 else:
                     small_dataset.append(large_batch[i:i +
-                                                     self.small_batch_size])
+                                                       self.small_batch_size])
         self.free()
 
         return small_dataset
