@@ -13,13 +13,17 @@ from torch.utils.data.distributed import DistributedSampler
 from transformers import (
     SchedulerType,
     get_scheduler,
+    AutoModelForCausalLM
 )
 
 import deepspeed
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.accelerator import get_accelerator
 
-from dschat.utils.model.model_utils import create_critic_model
+import sys
+sys.path.append('..')
+
+from dschat.utils.model.model_utils import create_hf_model, create_critic_model
 from dschat.utils.data.data_utils import create_prompt_dataset, DataCollatorReward
 from dschat.utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, \
     get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
@@ -53,9 +57,11 @@ def parse_args():
     parser.add_argument(
         "--model_name_or_path",
         type=str,
+        default="/data/Qwen/Qwen2.5-0.5B-Instruct",
+        # default="/data/data/llm_models/opt-125m",
         help=
         "Path to pretrained model or model identifier from huggingface.co/models.",
-        required=True,
+        # required=True,
     )
     parser.add_argument(
         "--num_padding_at_beginning",
@@ -68,13 +74,13 @@ def parse_args():
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=16,
+        default=2,
         help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
         type=int,
-        default=16,
+        default=2,
         help="Batch size (per device) for the evaluation dataloader.",
     )
     parser.add_argument(
@@ -194,11 +200,12 @@ def parse_args():
 
     ## Tensorboard logging
     parser.add_argument('--enable_tensorboard',
-                        action='store_true',
+                        # action='store_true',
+                        default=True,
                         help='Enable tensorboard logging')
     parser.add_argument('--tensorboard_path',
                         type=str,
-                        default="step2_tensorboard")
+                        default="/mnt2/output/step2_tensorboard")
     ## Tokenizer
     parser.add_argument(
         "--add_eot_token",
@@ -246,13 +253,26 @@ def main():
     tokenizer = load_hf_tokenizer(args.model_name_or_path,
                                   fast_tokenizer=True,
                                   add_special_tokens=additional_special_tokens)
-    rm_model = create_critic_model(args.model_name_or_path,
+    # rm_model = create_critic_model(args.model_name_or_path,
+    #                                tokenizer,
+    #                                ds_config,
+    #                                args.num_padding_at_beginning,
+    #                                dropout=args.dropout,
+    #                                zero_stage=args.zero_stage,
+    #                                compute_fp32_loss=args.compute_fp32_loss)
+    critic_model = create_hf_model(AutoModelForCausalLM,
+                                   args.model_name_or_path,
                                    tokenizer,
                                    ds_config,
-                                   args.num_padding_at_beginning,
-                                   dropout=args.dropout,
-                                   zero_stage=args.zero_stage,
-                                   compute_fp32_loss=args.compute_fp32_loss)
+                                   rlhf_training=False,
+                                   dropout=args.dropout)
+
+    from rlhf_qwen.model_design.reward_model_mod import RewardModel
+    rm_model = RewardModel(
+        critic_model,
+        tokenizer,
+        num_padding_at_beginning=args.num_padding_at_beginning,
+        compute_fp32_loss=args.compute_fp32_loss)
 
     # Model bigscience/bloom-560m has large variance at ln_f.weight parameter
     # This makes bf16 finetuning hard.
@@ -285,10 +305,30 @@ def main():
             rm_model = make_model_gradient_checkpointing_compatible(rm_model)
 
     train_phase = 2
-    train_dataset, eval_dataset = create_prompt_dataset(
-        args.local_rank, args.data_path, args.data_split,
-        args.data_output_path, train_phase, args.seed, tokenizer,
-        args.max_seq_len)
+    # train_dataset, eval_dataset = create_prompt_dataset(
+    #     args.local_rank, args.data_path, args.data_split,
+    #     args.data_output_path, train_phase, args.seed, tokenizer,
+    #     args.max_seq_len)
+
+    # from rlhf_qwen.datasets.lmdb_dataloader import CustomDPODataset
+    # train_dataset = CustomDPODataset(
+    #     db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb'
+    # )
+    # eval_dataset = CustomDPODataset(
+    #     db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_eval_eval_tokenizerQwen25_cache_20241204.lmdb'
+    # )
+
+    from rlhf_qwen.datasets.lmdb_dataloader import CustomDPODataset
+    train_dataset = CustomDPODataset(
+        # db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb',
+        db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_train_tokenizerQwen25_cache_20241204.lmdb',
+        max_len=512,
+    )
+    eval_dataset = CustomDPODataset(
+        # db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_eval_eval_tokenizerQwen25_cache_20241204.lmdb'
+        db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_eval_tokenizerQwen25_cache_20241204.lmdb',
+        max_len=512,
+    )
 
     # DataLoaders creation:
     data_collator = DataCollatorReward()
@@ -409,6 +449,7 @@ def main():
                     f"diff: {reward_score - reject_score}, acc: {acc}",
                     args.global_rank)
                 rm_model.train()
+
 
         print_rank_0(
             f"Epoch {epoch + 1}/{args.num_train_epochs} with loss {mean_loss / (step + 1)}",

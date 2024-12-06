@@ -306,7 +306,7 @@ def build_dataset(max_len=256, eval_ratio=0.1):
 
     random.seed(1234)
     random.shuffle(samples)
-    n_eval = min(int(len(samples) * (1 - eval_ratio)), 5000)
+    n_eval = min(int(len(samples) * eval_ratio), 5000)
     split_pos = len(samples) - n_eval
 
     train_dataset = CustomQADataset(samples[:split_pos],
