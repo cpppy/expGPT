@@ -86,7 +86,7 @@ def parse_args():
     parser.add_argument(
         "--max_seq_len",
         type=int,
-        default=512,
+        default=256,
         help="The maximum sequence length.",
     )
     parser.add_argument(
@@ -127,8 +127,9 @@ def parse_args():
         default=0,
         help="Number of steps for the warmup in the lr scheduler.")
     parser.add_argument("--output_dir",
+                        default='/mnt2/output/dsp_output_rw_model',
                         type=str,
-                        default=None,
+                        # default=None,
                         help="Where to store the model.")
     parser.add_argument("--seed",
                         type=int,
@@ -201,7 +202,7 @@ def parse_args():
     ## Tensorboard logging
     parser.add_argument('--enable_tensorboard',
                         # action='store_true',
-                        default=True,
+                        default= False,
                         help='Enable tensorboard logging')
     parser.add_argument('--tensorboard_path',
                         type=str,
@@ -320,14 +321,14 @@ def main():
 
     from rlhf_qwen.datasets.lmdb_dataloader import CustomDPODataset
     train_dataset = CustomDPODataset(
-        # db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb',
-        db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_train_tokenizerQwen25_cache_20241204.lmdb',
-        max_len=512,
+        db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb',
+        # db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_train_tokenizerQwen25_cache_20241204.lmdb',
+        max_len=args.max_seq_len,
     )
     eval_dataset = CustomDPODataset(
-        # db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_eval_eval_tokenizerQwen25_cache_20241204.lmdb'
-        db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_eval_tokenizerQwen25_cache_20241204.lmdb',
-        max_len=512,
+        db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_eval_eval_tokenizerQwen25_cache_20241204.lmdb',
+        # db_path='/mnt2/data/dsp_data_files2/dpo_en_zh_20k_eval_tokenizerQwen25_cache_20241204.lmdb',
+        max_len=args.max_seq_len,
     )
 
     # DataLoaders creation:

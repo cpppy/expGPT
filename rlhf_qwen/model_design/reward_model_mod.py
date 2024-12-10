@@ -44,7 +44,7 @@ class RewardModel(nn.Module):
                 past_key_values=None,
                 attention_mask=None,
                 position_ids=None,
-                head_mask=None,
+                # head_mask=None,
                 inputs_embeds=None,
                 use_cache=False):
         loss = None
@@ -225,6 +225,66 @@ class RewardModel(nn.Module):
 
 
     def forward_value(self,
+                      input_ids=None,
+                      attention_mask=None,
+                      past_key_values=None,
+                      position_ids=None,
+                      head_mask=None,
+                      inputs_embeds=None,
+                      return_value_only=False,
+                      prompt_length=0,
+                      use_cache=False):
+
+        kwargs = dict()
+        # if self.config.model_type == "llama":
+        #     kwargs = dict()
+        # else:
+        #     kwargs = dict(head_mask=head_mask)
+
+        kwargs['output_hidden_states'] = True
+
+        transformer_outputs = self.rwtransformer(
+            input_ids,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            **kwargs)
+        # print(transformer_outputs)
+        # hidden_states = transformer_outputs[0]
+        # for x in transformer_outputs.hidden_states:
+        #     print(f'hidden_states: {x.shape}')
+        # hidden_states = torch.mean(transformer_outputs.hidden_states[-1], dim=1)
+        hidden_states = transformer_outputs.hidden_states[-1]
+        # print(f'processed hidden_states: {hidden_states.shape}')
+
+        values = self.v_head(hidden_states).squeeze(-1)
+        if return_value_only:
+            return values
+        else:
+            # [0 0 0 0 prompt, answer, 0 0 0 0 ] for step 3, we have padding at the beginning
+            # [prompt, answer, 0, 0, 0, 0] this is normal
+            assert prompt_length > 1, "prompt_length must be greater than 1 to help select the end score"
+            bs = values.size(0)
+            seq_len = input_ids.shape[1]
+            chosen_end_scores = [
+            ]  # we use this name for consistency with the original forward function
+            for i in range(bs):
+                input_id = input_ids[i]
+                value = values[i]
+
+                c_inds = (input_id[prompt_length:] == self.PAD_ID).nonzero()
+                # here we only use the answer part of the sequence so we do not need to care about the padding at the beginning
+                c_ind = c_inds[0].item() + prompt_length if len(
+                    c_inds) > 0 else seq_len
+                chosen_end_scores.append(value[c_ind - 1])
+            return {
+                "values": values,
+                "chosen_end_scores": torch.stack(chosen_end_scores),
+            }
+
+
+    def forward_value_old(self,
                       input_ids=None,
                       attention_mask=None,
                       past_key_values=None,

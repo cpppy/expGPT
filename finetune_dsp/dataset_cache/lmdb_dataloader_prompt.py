@@ -64,63 +64,6 @@ class LMDBSearch(object):
         return self.__class__.__name__ + ' (' + self.db_path + ')'
 
 
-
-IGNORE_TOKEN_ID = -100
-PAD_TOKEN_ID = 151643
-
-class CustomDPODataset(Dataset):
-
-    def __init__(self, db_path, max_len=256):
-        super(CustomDPODataset, self).__init__()
-        assert db_path is not None
-        self.lmdb_search = LMDBSearch(db_path=db_path)
-        self.keys = self.lmdb_search.keys
-        self.len = self.lmdb_search.length
-        self.max_len = max_len
-
-    def __len__(self):
-        return self.len
-
-    def _pad_and_clip(self, sample):
-        input_ids = sample['input_ids']
-        labels = sample['labels']
-        max_len = self.max_len
-        ################## padding or clip ##################
-        input_ids += [PAD_TOKEN_ID] * max(0, max_len - len(input_ids))
-        labels += [IGNORE_TOKEN_ID] * max(0, max_len - len(labels))
-        input_ids = input_ids[:max_len]
-        labels = labels[:max_len]
-
-        input_ids = torch.tensor(input_ids, dtype=torch.int)
-        labels = torch.tensor(labels, dtype=torch.int)
-        attention_mask = input_ids.ne(PAD_TOKEN_ID)
-
-        return dict(
-            input_ids=input_ids.unsqueeze(dim=0),
-            labels=labels.type(torch.int64).unsqueeze(dim=0),
-            attention_mask=attention_mask.unsqueeze(dim=0),
-        )
-
-
-    '''
-        elif self.train_phase == 2:
-        return self.chosen_dataset[idx]["input_ids"], self.chosen_dataset[idx]["attention_mask"], \
-               self.reject_dataset[idx]["input_ids"], self.reject_dataset[idx]["attention_mask"]
-
-    '''
-
-    def __getitem__(self, idx):
-        sample_pairs = self.lmdb_search.search_by_index(self.keys[idx])
-        chosen = self._pad_and_clip(sample_pairs['chosen'])
-        rejected = self._pad_and_clip(sample_pairs['rejected'])
-        return (
-            chosen["input_ids"],
-            chosen["attention_mask"],
-            rejected["input_ids"],
-            rejected["attention_mask"]
-        )
-
-
 class CustomPromptDataset(Dataset):
 
     def __init__(self, db_path, max_len=256):
@@ -134,52 +77,65 @@ class CustomPromptDataset(Dataset):
     def __len__(self):
         return self.len
 
-    def _pad_and_clip(self, sample):
+
+    def __getitem__(self, idx):
+        sample = self.lmdb_search.search_by_index(self.keys[idx])
+        # print(sample)
+        # exit(0)
         input_ids = sample['input_ids']
         labels = sample['labels']
         max_len = self.max_len
+
+        """
         ################## padding or clip ##################
-        input_ids += [PAD_TOKEN_ID] * max(0, max_len - len(input_ids))
-        labels += [IGNORE_TOKEN_ID] * max(0, max_len - len(labels))
+        input_ids += [151643] * max(0, max_len - len(input_ids))
+        labels += [-100] * max(0, max_len - len(labels))
         input_ids = input_ids[:max_len]
         labels = labels[:max_len]
 
         input_ids = torch.tensor(input_ids, dtype=torch.int)
         labels = torch.tensor(labels, dtype=torch.int)
-        attention_mask = input_ids.ne(PAD_TOKEN_ID)
+        attention_mask = input_ids.ne(151643)
+        """
 
-        return dict(
-            input_ids=input_ids.unsqueeze(dim=0),
-            labels=labels.type(torch.int64).unsqueeze(dim=0),
-            attention_mask=attention_mask.unsqueeze(dim=0),
-        )
+        # only select prompt token_ids
+        # print(input_ids)
+        # print(labels)
+        # exit(0)
 
-    def __getitem__(self, idx):
+        prompt_ids = [x for x, y in zip(input_ids, labels) if y == -100]
+        ################## padding or clip ##################
+        # pad to left
+        prompt_ids = [151643] * max(0, max_len - len(prompt_ids)) + prompt_ids
+        prompt_ids = prompt_ids[:max_len]
+
+        prompt_ids = torch.tensor(prompt_ids, dtype=torch.int64)
+        attention_mask = prompt_ids.ne(151643)
+
+        # return dict(
+        #     input_ids=input_ids,
+        #     # labels=labels.type(torch.int64),
+        #     attention_mask=attention_mask,
+        # )
+
         '''
         elif self.train_phase == 3:
             return self.prompt_dataset[idx]["input_ids"], self.prompt_dataset[idx]["attention_mask"], \
                 self.pad_token_id
         '''
 
-        sample_pairs = self.lmdb_search.search_by_index(self.keys[idx])
-        chosen = self._pad_and_clip(sample_pairs['chosen'])
-        rejected = self._pad_and_clip(sample_pairs['rejected'])
-        # return (
-        #     chosen["input_ids"],
-        #     chosen["attention_mask"],
-        #     rejected["input_ids"],
-        #     rejected["attention_mask"]
-        # )
-        return
+        return prompt_ids, attention_mask, 151643
+
+
 
 
 if __name__ == '__main__':
 
-    search_api = LMDBSearch(
-        db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb'
-    )
-
-    print(search_api.keys[0:10])
+    # search_api = LMDBSearch(
+    #     db_path='/mnt2/data/dsp_data_files2/zhihu-kol_train_tokenizerQwen2_cache_20241126.lmdb'
+    # )
+    #
+    # print(search_api.keys[0:10])
 
     # img_fn = search_api.keys[101].decode()
     # print(img_fn)
@@ -190,8 +146,8 @@ if __name__ == '__main__':
     # print(search_api.length)
     # print(search_api.keys[0:10])
 
-    dataset = CustomDPODataset(
-        db_path='/mnt2/data/dsp_data_files2/dpo_zh_500_train_train_tokenizerQwen25_cache_20241204.lmdb'
+    dataset = CustomPromptDataset(
+        db_path='/mnt2/data/dsp_data_files2/zhihu-kol_train_tokenizerQwen2_cache_20241126.lmdb'
     )
     print(dataset.__getitem__(0))
 
